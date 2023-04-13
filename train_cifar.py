@@ -5,6 +5,7 @@ import time
 import math
 
 import numpy as np
+from matplotlib import pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -290,6 +291,12 @@ def main():
         logger.info("[Evaluation mode]")
 
     logger.info('Epoch \t Train Time \t Test Time \t LR \t \t Train Loss \t Train Acc \t Train Robust Loss \t Train Robust Acc \t Test Loss \t Test Acc \t Test Robust Loss \t Test Robust Acc')
+
+    train_robust_accs, test_robust_accs = [], []
+    train_robust_losses, test_robust_losses = [], []
+    train_accs, test_accs = [], []
+    train_losses, test_losses = [], []    
+
     for epoch in range(start_epoch, epochs):
         model.train()
         start_time = time.time()
@@ -413,6 +420,16 @@ def main():
                 epoch, train_time - start_time, test_time - train_time, lr,
                 train_loss/train_n, train_acc/train_n, train_robust_loss/train_n, train_robust_acc/train_n,
                 test_loss/test_n, test_acc/test_n, test_robust_loss/test_n, test_robust_acc/test_n)
+            
+            train_robust_accs.append(train_robust_acc/train_n)
+            train_robust_losses.append(train_robust_loss/train_n)
+            train_accs.append(train_acc/train_n)
+            train_losses.append(train_loss/train_n)
+            #do it for test too
+            test_robust_accs.append(test_robust_acc/test_n)
+            test_robust_losses.append(test_robust_loss/test_n)
+            test_accs.append(test_acc/test_n)
+            test_losses.append(test_loss/test_n)
 
             if args.val:
                 logger.info('validation %.4f \t %.4f \t %.4f \t %.4f',
@@ -453,6 +470,25 @@ def main():
                 -1, -1, -1, -1,
                 test_loss/test_n, test_acc/test_n, test_robust_loss/test_n, test_robust_acc/test_n)
             return
+        
+    plt.plot(train_robust_accs, label= 'train_acc_robust')
+    plt.plot(train_accs, label = 'train_acc')
+    plt.plot(test_robust_accs, label = 'test_robust_accs')
+    plt.plot(test_accs, label = 'test_acc')
+    plt.legend()
+    plt.savefig('accs.png')
+
+    plt.clf()
+
+    #plot the same for losses
+    plt.plot(train_robust_losses, label = 'train_loss_robust')
+    plt.plot(train_losses, label = 'train_loss')
+    plt.plot(test_robust_losses, label = 'test_robust_loss')
+    plt.plot(test_losses, label = 'test_loss')
+    plt.legend()
+    plt.savefig('losses.png')
+
+
 
 
 if __name__ == "__main__":
