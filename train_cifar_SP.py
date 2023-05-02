@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 import os
+from copy import deepcopy
 
 from wideresnet import WideResNet
 from preactresnet import PreActResNet18
@@ -25,7 +26,7 @@ def normalize(X):
     return (X - mu)/std
 
 upper_limit, lower_limit = 1,0
-save_epochs = [98,99,100,101,102,140,150]
+
 
 def clamp(X, lower_limit, upper_limit):
     return torch.max(torch.min(X, upper_limit), lower_limit)
@@ -123,6 +124,23 @@ def attack_pgd(model, X, y, epsilon, alpha, attack_iters, restarts,
         max_loss = torch.max(max_loss, all_loss)
     return max_delta
 
+def shrink_perturb(net, shrink, perturb, model_name, args):
+    # using a randomly-initialized model as a noise source respects how different kinds 
+    # of parameters are often initialized differently
+    if model_name == 'PreActResNet18':
+        new_init = PreActResNet18()
+    elif model_name == 'WideResNet':
+        new_init = WideResNet(34, 10, widen_factor=args.width_factor, dropRate=0.0)
+    else:
+        raise ValueError("Unknown model")
+    
+    new_init = nn.DataParallel(new_init).cuda()
+
+    params1 = new_init.parameters()
+    params2 = net.parameters()
+    for p1, p2 in zip(*[params1, params2]):
+        p1.data = deepcopy(shrink * p2.data + perturb * p1.data)
+    return new_init
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -155,7 +173,9 @@ def get_args():
     parser.add_argument('--mixup-alpha', type=float)
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--val', action='store_true')
-    parser.add_argument('--chkpt-iters', default=50, type=int)
+    parser.add_argument('--chkpt-iters', default=10, type=int)
+    parser.add_argument('--T', type=int, default=10, 
+                        help='number of stages for shrink and perturb')
     return parser.parse_args()
 
 
@@ -450,7 +470,7 @@ def main():
                     best_val_robust_acc = val_robust_acc/val_n
 
             # save checkpoint
-            if (epoch+1) % args.chkpt_iters == 0 or epoch+1 == epochs or (epoch+1) in save_epochs:
+            if (epoch+1) % args.chkpt_iters == 0 or epoch+1 == epochs:
                 torch.save(model.state_dict(), os.path.join(args.fname, f'model_{epoch}.pth'))
                 torch.save(opt.state_dict(), os.path.join(args.fname, f'opt_{epoch}.pth'))
 
